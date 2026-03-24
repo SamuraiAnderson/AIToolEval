@@ -11,7 +11,7 @@ task_eval 是一个 AI 辅助编程工具的评估框架。核心问题：给定
 ```
 本项目 (task_eval)                外部 git 仓库
 ┌─────────────────────┐       ┌──────────────────┐
-│ tasks/zstd-630/     │──────>│ task repo        │  AI 工具在此工作
+│ tasks/ini-parser-simple/│──>│ task repo        │  AI 工具在此工作
 │ ├── task.yaml       │       │ (被测代码库)      │
 │ └── prompts/        │       └──────────────────┘
 │     ├── standard.md │
@@ -61,7 +61,7 @@ task_eval/
 ```python
 @dataclass
 class Task:
-    id: str                  # 任务 ID，如 "zstd-630"
+    id: str                  # 任务 ID，如 "ini-parser-simple"
     task_repo: str           # 被测代码库 git URL
     task_repo_ref: str       # 分支/tag/commit
     test_repo: str           # task-test 验证集 git URL
@@ -183,9 +183,9 @@ task-test repo                    本项目 tasks/*/prompts/
 ```
 workdir/
 ├── task_repos/
-│   └── facebook__zstd__dev/          # {owner}__{repo}__{ref}
+│   └── workdir__local_ini_task_repo__main/  # {owner}__{repo}__{ref}
 └── test_repos/
-    └── eval-tests__zstd-630__main/
+    └── workdir__local_ini_test_repo__main/
 ```
 
 ### 6.2 evaluator.py — 评估执行

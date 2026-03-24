@@ -20,7 +20,7 @@ pip install -e ".[dev]"
 ```bash
 # 1. 准备环境，打印 prompt
 python cli/main.py prep \
-  --task tasks/zstd-630/task.yaml \
+  --task tasks/ini-parser-simple/task.yaml \
   --prompt standard.md
 
 # 2. 将终端输出的 prompt 复制到 AI 工具，AI 修改代码...
@@ -66,7 +66,7 @@ python cli/main.py prep --task <path> [--prompt <name>] [--workdir <dir>]
 终端输出示例：
 
 ```
-[prep] task repo ready: workdir/task_repos/facebook__zstd__dev
+[prep] task repo ready: workdir/task_repos/workdir__local_ini_task_repo__main
 [prep] base commit: abc123def456
 [prep] prompt file: standard.md
 
@@ -74,10 +74,10 @@ python cli/main.py prep --task <path> [--prompt <name>] [--workdir <dir>]
  PROMPT (copy below to your AI tool)
 ========================================================================
 
-# Bug Fix: zstd compression fails for large inputs
+# Code Generation: C INI Parser
 
-## Problem
-When input size exceeds 4GB, `zstd_compress()` returns error code -1.
+## Task
+Implement a simple INI parser in C by completing `ini_get_value()`.
 ...
 
 ========================================================================
@@ -122,7 +122,7 @@ python cli/main.py run \
 终端输出示例：
 
 ```
-[run] task: zstd-630
+[run] task: ini-parser-simple
 [run] tool: claude-code, model: claude-3.5-sonnet, run_index: 1
 [run] Collecting diff ...
 [run] Tests: 4/4 passed
@@ -292,17 +292,17 @@ python generate_results.py
 
 ```bash
 # 第一轮：标准 prompt + Claude Code
-python cli/main.py prep --task tasks/zstd-630/task.yaml --prompt standard.md
+python cli/main.py prep --task tasks/ini-parser-simple/task.yaml --prompt standard.md
 # ... AI 工具工作 ...
 python cli/main.py run --tool claude-code --model claude-3.5-sonnet --run-index 1
 
 # 第二轮：结构化 prompt + Claude Code
-python cli/main.py prep --task tasks/zstd-630/task.yaml --prompt structured.md
+python cli/main.py prep --task tasks/ini-parser-simple/task.yaml --prompt structured.md
 # ... AI 工具工作 ...
 python cli/main.py run --tool claude-code --model claude-3.5-sonnet --run-index 2
 
 # 第三轮：标准 prompt + Cursor
-python cli/main.py prep --task tasks/zstd-630/task.yaml --prompt standard.md
+python cli/main.py prep --task tasks/ini-parser-simple/task.yaml --prompt standard.md
 # ... AI 工具工作 ...
 python cli/main.py run --tool cursor --model gpt-4o --run-index 1 \
   --tag prompt_style=standard
@@ -347,7 +347,7 @@ from task_eval.db.store import EvalStore
 
 with EvalStore("results/eval_results.db") as store:
     # 按条件查询
-    results = store.query_results(task_id="zstd-630", tool="claude-code")
+    results = store.query_results(task_id="ini-parser-simple", tool="claude-code")
 
     # 分组统计
     stats = store.query_group_stats()

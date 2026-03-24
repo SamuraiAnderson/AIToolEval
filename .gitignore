@@ -3,3 +3,14 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+# Runtime artifacts
+workdir/.prep_state.json
+workdir/task_repos/
+workdir/test_repos/
+workdir/local_ini_task_repo/
+workdir/local_ini_test_repo/
+
+# Evaluation outputs
+results/eval_results.db
+results/report.md
+

@@ -281,8 +281,8 @@ COST_i  = TOKEN_i / 1_000_000 * model_price_per_1m_tokens + tool_fixed_cost
 ```python
 # 任务数据结构
 task = {
-    "id": "zstd-630",
-    "repo": "facebook/zstd",
+    "id": "ini-parser-simple",
+    "repo": "local_ini_task_repo",
     "issue": "Issue 描述文本",
     "issue_markdown_format": "M1",  # M1, M2, M3
     "test_suite": {
@@ -298,8 +298,8 @@ task = {
 
 ```bash
 # 1. 克隆代码库
-git clone https://github.com/facebook/zstd.git
-cd zstd
+git clone <your_task_repo_url_or_local_path>
+cd local_ini_task_repo
 
 # 2. 创建测试环境
 docker run -v $(pwd):/workspace -it eval_env
@@ -506,7 +506,7 @@ def generate_report(db_path="results/eval_results.db"):
 {
   "run_id": "37f6f1a7-11cb-4fd2-a77a-96e1a88a2f5d",
   "run_index": 1,
-  "task_id": "zstd-630",
+  "task_id": "ini-parser-simple",
   "tool": "Claude Code",
   "model": "Claude-3.5-Sonnet",
   "markdown_format": "M1",
@@ -546,9 +546,9 @@ def generate_report(db_path="results/eval_results.db"):
 
 | task_id | 格式(M) | 工具(A) | 模型(L) | run_count | mean_score | var_score | avg_total_tokens | avg_cost_usd | pass_rate | completion_rate |
 |---------|---------|---------|---------|-----------|------------|-----------|------------------|--------------|-----------|-----------------|
-| zstd-630 | M1 | Claude Code | Claude-3.5-Sonnet | 5 | 0.91 | 0.0008 | 15800 | 0.52 | 0.92 | 1.00 |
-| zstd-630 | M2 | Cursor | GPT-4o | 5 | 0.84 | 0.0031 | 13150 | 0.41 | 0.83 | 0.80 |
-| zstd-630 | M3 | OpenHands | Gemini-2.0 | 5 | 0.79 | 0.0052 | 11920 | 0.29 | 0.77 | 0.60 |
+| ini-parser-simple | M1 | Claude Code | Claude-3.5-Sonnet | 5 | 0.91 | 0.0008 | 15800 | 0.52 | 0.92 | 1.00 |
+| ini-parser-simple | M2 | Cursor | GPT-4o | 5 | 0.84 | 0.0031 | 13150 | 0.41 | 0.83 | 0.80 |
+| ini-parser-simple | M3 | OpenHands | Gemini-2.0 | 5 | 0.79 | 0.0052 | 11920 | 0.29 | 0.77 | 0.60 |
 
 ## 结论与建议
 {分析结论}
@@ -561,20 +561,17 @@ def generate_report(db_path="results/eval_results.db"):
 ### 8.1 任务定义
 
 ```yaml
-# tasks/zstd-630.yaml
+# tasks/ini-parser-simple/task.yaml
 task:
-  id: zstd-630
-  repo: facebook/zstd
+  id: ini-parser-simple
+  repo: workdir/local_ini_task_repo
   issue: |
-    Compression fails when input size exceeds 4GB
+    Implement a simple INI parser in C
   description_markdown_format: M1
   test_suite:
-    path: tests/test_compression.py
+    path: tests/test_ini_parser.c
     cases:
-      - test_compress_small
-      - test_compress_large
-      - test_decompress_small
-      - test_decompress_large
+      - ini_parse_sections_and_keys
   difficulty: medium
   expected_time:
     30  # minutes
@@ -585,13 +582,13 @@ task:
 ```bash
 # 运行评估
 python evaluate.py \
-  --task tasks/zstd-630.yaml \
+  --task tasks/ini-parser-simple/task.yaml \
   --tool claude-code \
   --model claude-3.5-sonnet \
   --format M1 \
   --repeats 5 \
   --db results/eval_results.db \
-  --output results/zstd-630.json
+  --output results/ini-parser-simple.json
 ```
 
 ### 8.3 生成报告

@@ -1,0 +1,10 @@
+task:
+  id: ini-parser-simple
+  task_repo: workdir/local_ini_task_repo
+  task_repo_ref: main
+  test_repo: workdir/local_ini_test_repo
+  test_repo_ref: main
+  metadata:
+    difficulty: easy
+    language: c
+    expected_time: 10
