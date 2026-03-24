@@ -7,8 +7,6 @@ class TestTask:
     def test_from_dict_roundtrip(self):
         data = {
             "id": "zstd-630",
-            "task_repo": "https://github.com/facebook/zstd.git",
-            "task_repo_ref": "dev",
             "test_repo": "https://github.com/eval-tests/zstd-630-tests.git",
             "test_repo_ref": "main",
             "metadata": {"difficulty": "medium"},
@@ -22,8 +20,6 @@ class TestTask:
     def test_defaults(self):
         task = Task(
             id="t1",
-            task_repo="url",
-            task_repo_ref="main",
             test_repo="url2",
             test_repo_ref="main",
         )

@@ -15,8 +15,8 @@ from task_eval.config import (
     DEFAULT_DB_PATH,
     DEFAULT_WORKDIR,
     PREP_STATE_FILE,
-    TASK_REPOS_SUBDIR,
     TEST_REPOS_SUBDIR,
+    task_repo_path as get_task_repo_path,
 )
 from task_eval.runner import task_loader
 
@@ -28,21 +28,17 @@ def cmd_prep(args: argparse.Namespace) -> None:
     task = task_loader.load_task(args.task)
     workdir = Path(args.workdir)
 
-    # clone / fetch repos
-    print(f"[prep] Ensuring task repo: {task.task_repo} @ {task.task_repo_ref}")
-    task_repo_path = task_loader.ensure_repo(
-        task.task_repo, task.task_repo_ref, workdir, TASK_REPOS_SUBDIR,
-    )
-
+    # clone / fetch test repo
     print(f"[prep] Ensuring test repo: {task.test_repo} @ {task.test_repo_ref}")
     test_repo_path = task_loader.ensure_repo(
         task.test_repo, task.test_repo_ref, workdir, TEST_REPOS_SUBDIR,
     )
 
-    # hard reset task repo
-    print("[prep] Resetting task repo to clean state ...")
-    task_loader.reset_repo(task_repo_path)
-    base_sha = task_loader.get_head_sha(task_repo_path)
+    # generate task repo from test repo
+    task_path = get_task_repo_path(workdir, task.id)
+    print(f"[prep] Generating task repo: {task_path}")
+    task_loader.generate_task_repo(test_repo_path, task_path)
+    base_sha = task_loader.get_head_sha(task_path)
     print(f"[prep] base commit: {base_sha}")
 
     # load prompt
@@ -80,7 +76,7 @@ def cmd_prep(args: argparse.Namespace) -> None:
     state = {
         "task_id": task.id,
         "task_yaml": str(Path(args.task).resolve()),
-        "task_repo_path": str(task_repo_path.resolve()),
+        "task_repo_path": str(task_path.resolve()),
         "test_repo_path": str(test_repo_path.resolve()),
         "base_commit_sha": base_sha,
         "prompt_file": prompt_name,
@@ -89,7 +85,7 @@ def cmd_prep(args: argparse.Namespace) -> None:
     state_path = workdir / PREP_STATE_FILE
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2))
     print(f"[prep] State saved to {state_path}")
-    print(f"[prep] Task repo ready: {task_repo_path}")
+    print(f"[prep] Task repo ready: {task_path}")
     print("[prep] You may now use your AI tool to modify the code.")
 
 

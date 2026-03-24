@@ -49,13 +49,13 @@ python cli/main.py prep --task <path> [--prompt <name>] [--workdir <dir>]
 |------|------|--------|------|
 | `--task` | 是 | — | task.yaml 文件路径 |
 | `--prompt` | 否 | 交互选择 | prompts/ 下的文件名 |
-| `--workdir` | 否 | `workdir` | git clone 目标目录 |
+| `--workdir` | 否 | `workdir` | 工作目录 |
 
 执行内容：
 
-1. 克隆/拉取 task repo 和 test repo
-2. 强制清理 task repo（`git reset --hard && git clean -fd`）
-3. 记录 `base_commit_sha`
+1. 克隆/拉取 task-test repo
+2. 运行 `generate.sh` 生成被测代码库到 `workdir/task_repos/{task_id}/`
+3. 记录 `base_commit_sha`（generate.sh 产生的初始 commit）
 4. 将 prompt 完整打印到终端（用分隔线包围）
 5. 将状态写入 `workdir/.prep_state.json`
 
@@ -63,10 +63,13 @@ python cli/main.py prep --task <path> [--prompt <name>] [--workdir <dir>]
 - 只有一个 prompt 文件时自动选择
 - 多个时交互列出供选择
 
+每次 `prep` 都会删除旧的生成目录并重新生成，确保干净的初始状态。
+
 终端输出示例：
 
 ```
-[prep] task repo ready: workdir/task_repos/workdir__local_ini_task_repo__main
+[prep] Ensuring test repo: workdir/local_ini_test_repo @ main
+[prep] Generating task repo: workdir/task_repos/ini-parser-simple
 [prep] base commit: abc123def456
 [prep] prompt file: standard.md
 
@@ -83,6 +86,7 @@ Implement a simple INI parser in C by completing `ini_get_value()`.
 ========================================================================
 
 [prep] State saved to workdir/.prep_state.json
+[prep] Task repo ready: workdir/task_repos/ini-parser-simple
 [prep] You may now use your AI tool to modify the code.
 ```
 
@@ -170,8 +174,6 @@ tasks/my-task/
 ```yaml
 task:
   id: my-task
-  task_repo: https://github.com/owner/repo.git
-  task_repo_ref: main                # commit hash 或 branch/tag
   test_repo: https://github.com/owner/repo-tests.git
   test_repo_ref: main
   metadata:                          # 可选
@@ -184,10 +186,8 @@ task:
 
 | 字段 | 必填 | 说明 |
 |------|------|------|
-| `id` | 是 | 唯一任务 ID |
-| `task_repo` | 是 | 被测代码库 git URL |
-| `task_repo_ref` | 是 | 具体 commit/branch/tag |
-| `test_repo` | 是 | 验证测试集 git URL |
+| `id` | 是 | 唯一任务 ID，同时决定被测代码库路径 `workdir/task_repos/{id}/` |
+| `test_repo` | 是 | task-test repo 的 git URL（含生成器和验证测试） |
 | `test_repo_ref` | 是 | 测试 repo 的 ref |
 | `metadata` | 否 | 自由元数据字典 |
 
@@ -228,16 +228,62 @@ Fix the bug in {repo} where ...
 
 ## 5. 创建 task-test repo
 
-每个 task-test repo 需要三个文件：
+每个 task-test repo 是任务的**单一事实源**，同时负责生成被测代码库和验证 AI 产出。
 
-### 5.1 eval.yaml
+### 5.1 目录结构
+
+```
+task-test-repo/
+├── generate.yaml      # 生成器声明
+├── generate.sh        # 生成被测代码库
+├── skeleton/          # 代码模板
+├── eval.yaml          # 验证入口声明
+├── eval.sh            # 验证脚本
+├── meta.md            # 问题权威描述
+└── tests/             # 测试用例
+```
+
+### 5.2 generate.yaml
+
+```yaml
+entry: ./generate.sh
+```
+
+### 5.3 generate.sh
+
+生成被测代码库的脚本。**必须**产出一个包含至少一次 commit 的 git 仓库。
+
+```bash
+#!/bin/bash
+set -euo pipefail
+OUTPUT_DIR="$1"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+cp -r "$SCRIPT_DIR/skeleton/." "$OUTPUT_DIR/"
+
+cd "$OUTPUT_DIR"
+git init
+git config user.email "task-eval@local"
+git config user.name "task-eval"
+git add -A
+git commit -m "initial task state"
+```
+
+合约要求：
+- 接收 `$1` 为输出目录路径（由框架提供的空目录）
+- 在 test repo 目录下执行
+- 必须在输出目录中创建有效的 git 仓库并包含至少一次 commit
+- 必须设置 `git config user.email` / `user.name`（确保在无全局配置的环境中正常工作）
+- 退出码 0 表示成功
+
+### 5.4 eval.yaml
 
 ```yaml
 entry: ./eval.sh
 result_file: results.json
 ```
 
-### 5.2 eval.sh
+### 5.5 eval.sh
 
 ```bash
 #!/bin/bash
@@ -257,7 +303,7 @@ python generate_results.py
 - 在 test repo 目录下执行
 - 将测试结果写入 `result_file` 指定的 JSON 文件
 
-### 5.3 results.json 格式
+### 5.6 results.json 格式
 
 ```json
 {
@@ -274,7 +320,7 @@ python generate_results.py
 - `duration`（可选）：耗时秒数
 - `error`（可选）：失败时的错误信息
 
-### 5.4 meta.md
+### 5.7 meta.md
 
 供 prompt 作者参考的问题权威描述。应包含：
 
@@ -311,7 +357,7 @@ python cli/main.py run --tool cursor --model gpt-4o --run-index 1 \
 python cli/main.py report
 ```
 
-每次 `prep` 都会强制重置 task repo 到干净状态，确保各轮之间互不干扰。
+每次 `prep` 都会删除旧的生成目录并重新生成，确保各轮之间互不干扰。
 
 ## 7. 数据查询
 

@@ -6,50 +6,60 @@ task_eval 是一个 AI 辅助编程工具的评估框架。核心问题：给定
 
 框架本身不调用任何 AI 工具，而是提供一套标准化的流程：准备环境 → 人工/AI 完成任务 → 自动运行测试 → 记录原始结果。
 
-## 2. 三层分离架构
+## 2. 两层架构
+
+task-test repo 是任务的**单一事实源**：它既定义如何生成被测代码库（出题），也定义如何验证答案（判卷）。
 
 ```
-本项目 (task_eval)                外部 git 仓库
-┌─────────────────────┐       ┌──────────────────┐
-│ tasks/ini-parser-simple/│──>│ task repo        │  AI 工具在此工作
-│ ├── task.yaml       │       │ (被测代码库)      │
-│ └── prompts/        │       └──────────────────┘
-│     ├── standard.md │
-│     └── structured.md│      ┌──────────────────┐
-│  (怎么问 AI 工具)    │──────>│ task-test repo   │  验证集（黑箱）
-└─────────────────────┘       │ ├── meta.md      │  问题权威描述
-                              │ ├── eval.yaml    │  声明入口
-                              │ ├── eval.sh      │  自带加载器
-                              │ └── tests/       │  测试用例
-                              └──────────────────┘
+本项目 (task_eval)                外部 git 仓库 (task-test repo)
+┌─────────────────────┐       ┌──────────────────────────┐
+│ tasks/ini-parser-simple/│──>│ task-test repo           │
+│ ├── task.yaml       │       │ ├── meta.md              │  问题权威描述
+│ └── prompts/        │       │ ├── generate.yaml        │  生成器声明
+│     ├── standard.md │       │ ├── generate.sh          │  生成被测代码库
+│     └── structured.md│      │ ├── skeleton/            │  代码模板
+│  (怎么问 AI 工具)    │       │ ├── eval.yaml            │  验证入口声明
+└─────────────────────┘       │ ├── eval.sh              │  验证脚本
+                              │ └── tests/               │  测试用例
+                              └──────────────────────────┘
+                                        │
+                          generate.sh   │   eval.sh
+                              ↓         │       ↓
+                    ┌─────────────────┐ │  results.json
+                    │ task repo       │ │
+                    │ (由 generate.sh │←┘
+                    │  生成到          │
+                    │  workdir/task_repos/{task_id}/)
+                    └─────────────────┘
 ```
 
 | 层级 | 位置 | 内容 | 性质 |
 |------|------|------|------|
-| 任务元数据 | 本项目 `tasks/*/task.yaml` | git URL、ref、metadata | 配置 |
+| 任务元数据 | 本项目 `tasks/*/task.yaml` | test repo URL、ref、metadata | 配置 |
 | Prompt 变体 | 本项目 `tasks/*/prompts/*.md` | 给 AI 工具的实际 prompt | 可实验变量 |
 | Ground Truth | task-test repo `meta.md` | 问题权威定义、Root Cause | 客观事实（不给 AI 看） |
+| 任务生成 | task-test repo `generate.sh` + `skeleton/` | 生成被测代码库 | 对 AI 不可见 |
 | 验证测试 | task-test repo `eval.sh` + `tests/` | 黑箱测试，判断修改是否正确 | 对 AI 不可见 |
-| 被测代码 | task repo | AI 工具在上面工作的真实代码库 | 外部仓库 |
+| 被测代码 | `workdir/task_repos/{task_id}/` | AI 工具在上面工作的代码库 | 由 generate.sh 生成 |
 
 ## 3. 项目结构
 
 ```
 task_eval/
 ├── src/task_eval/
-│   ├── config.py              # 配置常量
+│   ├── config.py              # 配置常量 + 路径函数
 │   ├── models.py              # 数据模型：Task, TestCaseResult, EvalResult
 │   ├── db/
 │   │   └── store.py           # SQLite 存储：EvalStore
 │   ├── runner/
-│   │   ├── task_loader.py     # YAML 加载 + git 仓库管理 + prompt 加载
+│   │   ├── task_loader.py     # YAML 加载 + git 仓库管理 + 生成器 + prompt 加载
 │   │   └── evaluator.py       # diff 采集 + 执行 eval.sh + 结果解析 + 存库
 │   └── report/
 │       └── generator.py       # SQL 聚合 + Markdown 报告
 ├── cli/
 │   └── main.py                # 统一 CLI 入口：prep / run / report
 ├── tasks/                     # 任务定义目录
-├── workdir/                   # 运行时 git clone 目标
+├── workdir/                   # 运行时 git clone + 生成目标
 ├── results/                   # 数据库 + 报告输出
 └── tests/                     # 框架自身的单元测试
 ```
@@ -62,13 +72,13 @@ task_eval/
 @dataclass
 class Task:
     id: str                  # 任务 ID，如 "ini-parser-simple"
-    task_repo: str           # 被测代码库 git URL
-    task_repo_ref: str       # 分支/tag/commit
     test_repo: str           # task-test 验证集 git URL
     test_repo_ref: str       # 分支/tag/commit
     metadata: dict           # 可选：difficulty, language, expected_time
     prompts_dir: str         # prompts 目录路径
 ```
+
+被测代码库（task repo）不再由 `task.yaml` 指定 URL，而是由 task-test repo 的 `generate.sh` 动态生成。其路径由 `task_id` 确定：`workdir/task_repos/{task_id}/`。
 
 ### 4.2 EvalResult
 
@@ -114,31 +124,68 @@ class TestCaseResult:
 
 框架与 task-test repo 之间通过标准化接口通信，框架不关心测试的语言、框架或编译方式。
 
+task-test repo 承担两个职责：**生成被测代码库**和**验证 AI 产出**。
+
 ### 5.1 必需文件
 
 ```
 task-test-repo/
-├── eval.yaml          # 声明入口脚本和结果文件路径
-├── eval.sh            # 执行入口，接收 task repo 路径作为 $1
+├── generate.yaml      # 声明生成器入口脚本
+├── generate.sh        # 生成被测代码库
+├── skeleton/          # 代码模板（generate.sh 使用）
+├── eval.yaml          # 声明验证入口脚本和结果文件路径
+├── eval.sh            # 验证入口，接收 task repo 路径作为 $1
 ├── meta.md            # 问题权威描述（供 prompt 作者参考）
 └── tests/             # 测试用例（结构由 eval.sh 决定）
 ```
 
-### 5.2 eval.yaml
+### 5.2 generate.yaml
+
+```yaml
+entry: ./generate.sh
+```
+
+### 5.3 generate.sh 合约
+
+- 接收一个参数：`$1` = 输出目录路径（由框架创建的空目录）
+- 在 test repo 目录下执行
+- **必须**在输出目录中生成一个有效的 git 仓库，且包含至少一次 commit（框架的 `collect_diff()` 和 `get_head_sha()` 依赖此约束）
+- 必须设置 git config（`user.email` / `user.name`），以确保在无全局配置的环境中正常工作
+- 退出码 0 表示成功
+
+示例：
+
+```bash
+#!/bin/bash
+set -euo pipefail
+OUTPUT_DIR="$1"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+cp -r "$SCRIPT_DIR/skeleton/." "$OUTPUT_DIR/"
+
+cd "$OUTPUT_DIR"
+git init
+git config user.email "task-eval@local"
+git config user.name "task-eval"
+git add -A
+git commit -m "initial task state"
+```
+
+### 5.4 eval.yaml
 
 ```yaml
 entry: ./eval.sh
 result_file: results.json
 ```
 
-### 5.3 eval.sh 合约
+### 5.5 eval.sh 合约
 
 - 接收一个参数：task repo 的绝对路径
 - 在 test repo 目录下执行
 - 自行处理：测试注入/关联、依赖安装、编译、执行
 - 将结果写入 `result_file` 指定的 JSON 文件
 
-### 5.4 results.json 格式
+### 5.6 results.json 格式
 
 ```json
 {
@@ -151,7 +198,7 @@ result_file: results.json
 
 每个测试条目必须包含 `name` 和 `passed` 字段，`duration` 和 `error` 可选。
 
-### 5.5 信息流：meta.md → prompts
+### 5.7 信息流：meta.md → prompts
 
 ```
 task-test repo                    本项目 tasks/*/prompts/
@@ -173,19 +220,26 @@ task-test repo                    本项目 tasks/*/prompts/
 | `load_task(yaml_path)` | 解析 task.yaml → `Task` |
 | `list_prompts(task)` | 列出可用 prompt 文件 |
 | `load_prompt(task, name)` | 读取 prompt 内容 |
-| `ensure_repo(url, ref, workdir, subdir)` | clone/fetch + checkout |
-| `reset_repo(path)` | `git reset --hard && git clean -fd` |
+| `ensure_repo(url, ref, workdir, subdir)` | clone/fetch + checkout（用于 test repo） |
 | `get_head_sha(path)` | 获取当前 HEAD SHA |
 | `load_eval_config(test_repo_path)` | 读取 eval.yaml |
+| `load_generate_config(test_repo_path)` | 读取 generate.yaml |
+| `generate_task_repo(test_repo_path, output_dir)` | 执行 generate.sh 生成被测代码库 |
+
+路径合约函数（`config.py`）：
+
+| 函数 | 职责 |
+|------|------|
+| `task_repo_path(workdir, task_id)` | 返回 `workdir/task_repos/{task_id}/`，被测代码库的确定性路径 |
 
 工作目录布局：
 
 ```
 workdir/
 ├── task_repos/
-│   └── workdir__local_ini_task_repo__main/  # {owner}__{repo}__{ref}
+│   └── ini-parser-simple/              # {task_id}，由 generate.sh 生成
 └── test_repos/
-    └── workdir__local_ini_test_repo__main/
+    └── workdir__local_ini_test_repo__main/  # clone of test repo
 ```
 
 ### 6.2 evaluator.py — 评估执行
@@ -226,11 +280,13 @@ prep ──→ [AI 工具工作] ──→ run ──→ report
 
 ### 7.1 prep 阶段
 
-1. clone/fetch task repo 和 test repo
-2. `git reset --hard && git clean -fd` 清理 task repo
-3. 记录 `base_commit_sha`
+1. clone/fetch task-test repo
+2. 运行 `generate.sh` 生成被测代码库到 `workdir/task_repos/{task_id}/`
+3. 记录 `base_commit_sha`（generate.sh 产生的初始 commit）
 4. 打印 prompt 到终端供用户复制
 5. 写入 `.prep_state.json`
+
+每次 `prep` 都会删除旧的生成目录并从零重建，确保干净的初始状态。
 
 ### 7.2 run 阶段
 
@@ -251,7 +307,7 @@ prep ──→ [AI 工具工作] ──→ run ──→ report
 | Python 3.11+ | 主语言 |
 | sqlite3 | 结果存储（标准库） |
 | argparse | CLI 解析（标准库） |
-| subprocess | 调用 git 和 eval.sh（标准库） |
+| subprocess | 调用 git 和 eval.sh / generate.sh（标准库） |
 | dataclasses | 数据模型（标准库） |
 | PyYAML | YAML 解析 |
 | pytest | 框架自身的单元测试 |

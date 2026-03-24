@@ -7,7 +7,6 @@ __pycache__/
 workdir/.prep_state.json
 workdir/task_repos/
 workdir/test_repos/
-workdir/local_ini_task_repo/
 workdir/local_ini_test_repo/
 
 # Evaluation outputs

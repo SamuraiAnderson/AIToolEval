@@ -7,8 +7,6 @@ from dataclasses import dataclass, field, asdict
 @dataclass
 class Task:
     id: str
-    task_repo: str
-    task_repo_ref: str
     test_repo: str
     test_repo_ref: str
     metadata: dict = field(default_factory=dict)
