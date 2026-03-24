@@ -1,0 +1,10 @@
+task:
+  id: zstd-630
+  task_repo: https://github.com/facebook/zstd.git
+  task_repo_ref: dev
+  test_repo: https://github.com/eval-tests/zstd-630-tests.git
+  test_repo_ref: main
+  metadata:
+    difficulty: medium
+    language: c
+    expected_time: 30
