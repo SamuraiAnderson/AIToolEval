@@ -1,6 +1,6 @@
 task:
   id: ini-parser-simple
-  test_repo: workdir/local_ini_test_repo
+  test_repo: https://github.com/SamuraiAnderson/AITE_ini_parser.git
   test_repo_ref: main
   metadata:
     difficulty: easy
