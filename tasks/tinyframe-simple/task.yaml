@@ -1,0 +1,8 @@
+task:
+  id: tinyframe-simple
+  test_repo: workdir/local_tinyframe_test_repo
+  test_repo_ref: main
+  metadata:
+    difficulty: medium
+    language: c
+    expected_time: 45
