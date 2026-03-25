@@ -1,6 +1,6 @@
 task:
   id: tinyframe-simple
-  test_repo: workdir/local_tinyframe_test_repo
+  test_repo: https://github.com/SamuraiAnderson/AITE_tinyframe.git
   test_repo_ref: main
   metadata:
     difficulty: medium
